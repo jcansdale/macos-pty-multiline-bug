@@ -1,0 +1,49 @@
+name: PTY Multiline Bug Reproducer
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-pty:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-13, ubuntu-latest, windows-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Show environment info
+        shell: bash
+        run: |
+          echo "=== Environment Info ==="
+          echo "OS: ${{ matrix.os }}"
+          echo "Runner OS: $RUNNER_OS"
+          uname -a || ver
+          python3 --version
+          echo "Shell: $SHELL"
+          echo "TERM: $TERM"
+          
+      - name: Run PTY reproducer (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "=== Running PTY Multiline Bug Reproducer ==="
+          python3 repro.py
+          
+      - name: Run PTY reproducer (Windows - expected to fail)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "=== PTY test on Windows ==="
+          echo "Note: PTY/fork not available on Windows - this is expected to fail or skip"
+          python3 repro.py || echo "Expected: PTY not supported on Windows"
