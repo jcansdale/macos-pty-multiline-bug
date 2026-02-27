@@ -89,6 +89,18 @@ ExtHostTerminal.sendText(text)
 
 The entire text is written in a single `ptyProcess.write()` call.
 
+Key source locations (VS Code `main` branch):
+
+| Step | Source |
+|------|--------|
+| `sendText()` — newline conversion | [terminalInstance.ts `sendText()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalInstance.ts) — `text.replace(/\r?\n/g, '\r')` |
+| `write()` — sends to pty host | [terminalProcessManager.ts `write()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts) — calls `this._process.input(data)` |
+| `input()` — IPC to pty host | [localPty.ts `input()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/electron-browser/localPty.ts) |
+| `input()` — pty host side | [ptyService.ts `input()`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/ptyService.ts) |
+| **`input()` — writes to node-pty** | [**terminalProcess.ts `input()`**](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) — `this._ptyProcess!.write(data)` |
+| Flow control (output side) | [terminalProcess.ts `acknowledgeDataEvent()`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) — pause/resume at 100K chars |
+| Flow control constants | [terminal.ts `FlowControlConstants`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/common/terminal.ts) — `HighWatermarkChars = 100000` |
+
 ## Root Cause
 
 macOS PTY has a ~1024-byte input buffer. When an interactive shell's line editor (ZLE for zsh) echoes characters back, it creates backpressure on the PTY. When the buffer fills:
