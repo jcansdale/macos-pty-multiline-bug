@@ -2,6 +2,8 @@
 
 Multiline commands exceeding ~1024 bytes sent via VS Code's terminal tool block indefinitely on macOS, corrupting the terminal session.
 
+Related VS Code issue: [microsoft/vscode#296955](https://github.com/microsoft/vscode/issues/296955)
+
 ## Reproducing in VS Code Copilot (Agent Mode)
 
 The simplest way to trigger the bug is to ask Copilot in agent mode to run a multiline echo command that exceeds ~1024 bytes. Paste this into Copilot chat:
