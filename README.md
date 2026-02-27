@@ -114,9 +114,9 @@ For VS Code's terminal tool, any approach that avoids literal newlines in the co
 ## CI
 
 The GitHub Actions workflow tests across:
-- macOS 14 (ARM64) — **expected to show bug** (exit 1, continue-on-error)
+- macOS 15 Sequoia (ARM64) — **expected to show bug** (exit 1, continue-on-error)
+- macOS 14 Sonoma (ARM64) — **expected to show bug** (exit 1, continue-on-error)
 - Ubuntu — expected to pass (exit 0)
-- Windows — skipped (no PTY, exit 0)
 
 ## License
 

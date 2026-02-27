@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, ubuntu-latest, windows-latest]
+        os: [macos-15, macos-14, ubuntu-latest]
     
     runs-on: ${{ matrix.os }}
     
@@ -28,23 +28,12 @@ jobs:
           echo "=== Environment Info ==="
           echo "OS: ${{ matrix.os }}"
           echo "Runner OS: $RUNNER_OS"
-          uname -a || ver
+          uname -a
           python3 --version
           echo "Shell: $SHELL"
           echo "TERM: $TERM"
           
-      - name: Run PTY reproducer (Unix)
-        if: runner.os != 'Windows'
+      - name: Run PTY reproducer
         shell: bash
-        run: |
-          echo "=== Running PTY Multiline Bug Reproducer ==="
-          python3 repro.py
+        run: python3 repro.py
         continue-on-error: ${{ runner.os == 'macOS' }}
-          
-      - name: Run PTY reproducer (Windows - expected to fail)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          echo "=== PTY test on Windows ==="
-          echo "Note: PTY/fork not available on Windows - this is expected to fail or skip"
-          python3 repro.py || echo "Expected: PTY not supported on Windows"
