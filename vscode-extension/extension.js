@@ -9,128 +9,122 @@ const os = require('os');
  * by sending multiline commands via terminal.sendText() —
  * the same API path used by Copilot's terminal tool.
  *
- * Instead of using the proposed onDidWriteTerminalData API,
- * commands write results to temp files which we poll for.
+ * Optimized: reuses one terminal per test size, runs sizes in parallel.
  */
 
-const SETTLE_MS = 2000;    // wait for shell prompt
-const TIMEOUT_MS = 15000;  // per test case
-const BETWEEN_MS = 2000;   // between tests
+const SETTLE_MS = 1000;   // wait for shell prompt
+const TIMEOUT_MS = 8000;  // per command
+const BETWEEN_MS = 500;   // between sends on same terminal
 
-/**
- * Build a multiline echo command that writes result to a temp file.
- * The command: echo '<multiline>' | wc -c > <tmpfile> && echo <marker> >> <tmpfile>
- */
-function buildTest(numLines, lineLength = 50) {
+function buildTest(numLines, iter, lineLength = 50) {
   const lines = [];
   for (let i = 1; i <= numLines; i++) {
     lines.push(`L${String(i).padStart(2, '0')} ${'a'.repeat(lineLength)}`);
   }
   const content = lines.join('\n');
-  const marker = `DONE_${numLines}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const tmpFile = path.join(os.tmpdir(), `pty-repro-${process.pid}-${numLines}-${Date.now()}.txt`);
-
-  // Command: echo the multiline content, pipe to wc -c, write result to file,
-  // then append marker. If the command corrupts, the marker file won't have the marker.
+  const id = `${numLines}_${iter}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const marker = `DONE_${id}`;
+  const tmpFile = path.join(os.tmpdir(), `pty-repro-${id}.txt`);
   const cmd = `echo '${content}' | wc -c > ${tmpFile} && echo ${marker} >> ${tmpFile}`;
-
   return { cmd, marker, tmpFile, cmdBytes: Buffer.byteLength(cmd) };
 }
 
+/** Wait for a marker file to appear, or timeout. */
+async function waitForMarker(tmpFile, marker, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const content = fs.readFileSync(tmpFile, 'utf8');
+      if (content.includes(marker)) return { success: true };
+    } catch {}
+    await sleep(100);
+  }
+  // Check for partial output
+  let detail = 'no output file';
+  try {
+    const content = fs.readFileSync(tmpFile, 'utf8').trim();
+    detail = content ? `partial: ${content.slice(0, 60)}` : 'empty file';
+  } catch {}
+  return { success: false, detail };
+}
+
 /**
- * Run a single test: create a terminal, send a multiline command,
- * check if the result file appears with the correct marker.
+ * Run multiple iterations for a given line count on one terminal.
+ * Reusing the terminal avoids the 1s settle time per iteration.
  */
-async function runSingleTest(numLines) {
-  const test = buildTest(numLines);
-
-  // Clean up any pre-existing file
-  try { fs.unlinkSync(test.tmpFile); } catch {}
-
+async function runTestGroup(numLines, iterations) {
   const terminal = vscode.window.createTerminal({
-    name: `PTY test ${numLines}`,
+    name: `PTY ${numLines}`,
     hideFromUser: false,
   });
 
-  try {
-    // Wait for terminal to be ready
-    await sleep(SETTLE_MS);
+  await sleep(SETTLE_MS);
 
-    // Send the multiline command via sendText — same path as Copilot's terminal tool
-    terminal.sendText(test.cmd, true);
+  let passed = 0;
+  let failed = 0;
+  let cmdBytes = 0;
+  let lastDetail = '';
 
-    // Poll for the result file
-    const startTime = Date.now();
-    while (Date.now() - startTime < TIMEOUT_MS) {
-      try {
-        const content = fs.readFileSync(test.tmpFile, 'utf8').trim();
-        if (content.includes(test.marker)) {
-          // Marker found — command completed successfully
-          return { success: true, reason: 'OK', cmdBytes: test.cmdBytes };
-        }
-      } catch {
-        // File doesn't exist yet
-      }
-      await sleep(300);
-    }
-
-    // Timeout — the command didn't complete
-    // Check if a partial file exists
-    let reason = 'TIMEOUT';
-    try {
-      const content = fs.readFileSync(test.tmpFile, 'utf8');
-      reason = `TIMEOUT (partial file: ${content.trim().slice(0, 50)})`;
-    } catch {
-      reason = 'TIMEOUT (no output file — command likely stuck in quote> mode)';
-    }
-
-    return { success: false, reason, cmdBytes: test.cmdBytes };
-  } finally {
-    terminal.dispose();
-    // Clean up
+  for (let i = 0; i < iterations; i++) {
+    const test = buildTest(numLines, i);
+    cmdBytes = test.cmdBytes;
     try { fs.unlinkSync(test.tmpFile); } catch {}
+
+    terminal.sendText(test.cmd, true);
+    const result = await waitForMarker(test.tmpFile, test.marker, TIMEOUT_MS);
+
+    if (result.success) {
+      passed++;
+    } else {
+      failed++;
+      lastDetail = result.detail;
+      // Terminal may be stuck — dispose and create a fresh one
+      terminal.dispose();
+      // Small delay then bail on remaining iterations for this size
+      // (stuck terminal won't recover)
+      break;
+    }
+
+    try { fs.unlinkSync(test.tmpFile); } catch {}
+    if (i < iterations - 1) await sleep(BETWEEN_MS);
   }
+
+  terminal.dispose();
+  return { numLines, passed, failed, cmdBytes, lastDetail };
 }
 
 /**
  * Run all test cases. Returns { failures, results }.
- * Used by both the command and the CI test runner.
  */
 async function runAllTests(log) {
   const testSizes = [18, 20, 25, 30];
-  const iterations = 3; // run each size multiple times — bug is intermittent
-  const results = [];
-  let failures = 0;
+  const iterations = 5;
 
+  log(`Running ${iterations} iterations per size, sizes in parallel`);
   log(`${'Lines'.padEnd(8)} ${'Bytes'.padEnd(10)} ${'Pass'.padEnd(8)} Result`);
   log('-'.repeat(60));
 
-  for (const numLines of testSizes) {
-    let passed = 0;
-    let failed = 0;
-    let lastResult = null;
+  // Run all sizes in parallel
+  const promises = testSizes.map(n => runTestGroup(n, iterations));
+  const results = await Promise.all(promises);
 
-    for (let i = 0; i < iterations; i++) {
-      const result = await runSingleTest(numLines);
-      lastResult = result;
-      if (result.success) {
-        passed++;
-      } else {
-        failed++;
-      }
-      await sleep(BETWEEN_MS);
-    }
-
-    results.push({ numLines, passed, failed, lastResult });
-    failures += failed;
-    const passStr = `${passed}/${iterations}`;
-    const status = failed === 0
+  let totalFailures = 0;
+  for (const r of results) {
+    totalFailures += r.failed;
+    const total = r.passed + r.failed;
+    const passStr = `${r.passed}/${total}${total < iterations ? '*' : ''}`;
+    const status = r.failed === 0
       ? '✅ OK'
-      : `❌ ${failed} FAILED`;
-    log(`${String(numLines).padEnd(8)} ${String(lastResult.cmdBytes).padEnd(10)} ${passStr.padEnd(8)} ${status}`);
+      : `❌ ${r.failed} FAILED${r.lastDetail ? ` (${r.lastDetail})` : ''}`;
+    log(`${String(r.numLines).padEnd(8)} ${String(r.cmdBytes).padEnd(10)} ${passStr.padEnd(8)} ${status}`);
   }
 
-  return { failures, results };
+  if (results.some(r => r.passed + r.failed < iterations)) {
+    log('');
+    log('* = stopped early (terminal stuck after failure)');
+  }
+
+  return { failures: totalFailures, results };
 }
 
 function activate(context) {
@@ -169,4 +163,4 @@ function sleep(ms) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, runAllTests, runSingleTest };
+module.exports = { activate, deactivate, runAllTests, runSingleTest: runTestGroup };
