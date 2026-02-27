@@ -13,6 +13,9 @@ A VS Code extension that calls `terminal.sendText()` with progressively larger m
 This exercises the full write pipeline:  
 `sendText()` → `\n`→`\r` conversion → IPC → pty host → node-pty → PTY
 
+The test runs in CI via [`@vscode/test-electron`](https://github.com/nicolo-ribaudo/vscode-test-web), which downloads a real VS Code instance and executes the extension's test suite inside it.
+
+To run manually:
 ```
 1. Open VS Code with this repo
 2. Run: code --extensionDevelopmentPath=./vscode-extension .
@@ -39,7 +42,22 @@ python3 repro.py
 
 ## Results
 
-### Python reproducer (macOS)
+### VS Code extension (macOS — CI)
+
+Tested via `terminal.sendText()` on GitHub Actions macOS runners (VS Code stable & insiders):
+
+| Lines | Bytes | macOS | Linux |
+|-------|-------|-------|-------|
+| 5     | ~500  | ✅ 5/5 | ✅ 5/5 |
+| 10    | ~780  | ✅ 5/5 | ✅ 5/5 |
+| 18    | ~1220 | ❌ fails | ✅ 5/5 |
+| 20    | ~1330 | ❌ fails | ✅ 5/5 |
+| 25    | ~1600 | ❌ fails | ✅ 5/5 |
+| 30    | ~1880 | ❌ fails | ✅ 5/5 |
+
+The bug is intermittent — commands above ~1024 bytes fail on some iterations but not all. When a failure occurs, the terminal gets stuck (no output file produced) and remaining iterations are skipped.
+
+### Python reproducer (macOS — CI)
 
 | Lines | Bytes  | macOS  | Linux |
 |-------|--------|--------|-------|
@@ -102,10 +120,17 @@ This could be implemented in VS Code's `TerminalProcess.input()` method at [`src
 
 ## CI
 
-The GitHub Actions workflow tests across:
+Two separate workflows:
+
+- **[PTY Reproducer](.github/workflows/pty-repro.yml)** — Python and node-pty tests (fast, lightweight)
+- **[VS Code Extension Reproducer](.github/workflows/vscode-repro.yml)** — downloads VS Code, runs `terminal.sendText()` tests via `@vscode/test-electron`
+
+Both test across:
 - macOS 15 (ARM64) — **expected to fail** (bug detected)
-- macOS 14 (ARM64) — **expected to fail** (bug detected)
+- macOS 14 (ARM64) — **expected to fail** (bug detected)  
 - Ubuntu — expected to pass
+
+The VS Code workflow also tests both **stable** and **insiders** builds.
 
 ## License
 
