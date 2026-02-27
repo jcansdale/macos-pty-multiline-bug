@@ -97,7 +97,7 @@ async function runTestGroup(numLines, iterations) {
  * Run all test cases. Returns { failures, results }.
  */
 async function runAllTests(log) {
-  const testSizes = [18, 20, 25, 30];
+  const testSizes = [5, 10, 18, 20, 25, 30];
   const iterations = 5;
 
   log(`Running ${iterations} iterations per size, sizes in parallel`);
