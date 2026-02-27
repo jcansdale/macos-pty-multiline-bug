@@ -9,7 +9,7 @@ Related VS Code issue: [microsoft/vscode#296955](https://github.com/microsoft/vs
 The simplest way to trigger the bug is to ask Copilot in agent mode to run a multiline echo command that exceeds ~1024 bytes. Paste this into Copilot chat:
 
 > Run this command in the terminal:
-> ```
+>
 > echo 'L01 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 > L02 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 > L03 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -30,7 +30,6 @@ The simplest way to trigger the bug is to ask Copilot in agent mode to run a mul
 > L18 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 > L19 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 > L20 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' | wc -c
-> ```
 
 **Expected:** Output `1120`
 
