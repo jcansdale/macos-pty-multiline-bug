@@ -50,4 +50,3 @@ jobs:
       - name: Run node-pty reproducer
         shell: bash
         run: node repro-node-pty.js
-        run: xvfb-run -a npm test
