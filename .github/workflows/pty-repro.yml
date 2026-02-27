@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-13, ubuntu-latest, windows-latest]
+        os: [macos-14, ubuntu-latest, windows-latest]
     
     runs-on: ${{ matrix.os }}
     
@@ -39,6 +39,7 @@ jobs:
         run: |
           echo "=== Running PTY Multiline Bug Reproducer ==="
           python3 repro.py
+        continue-on-error: ${{ runner.os == 'macOS' }}
           
       - name: Run PTY reproducer (Windows - expected to fail)
         if: runner.os == 'Windows'

@@ -124,12 +124,11 @@ def main():
     print("-" * 50)
     sys.stdout.flush()
     
+    blocked = 0
     for num_lines, desc in tests:
         success, cmd_bytes = test_pty_write(num_lines)
-        
-        expected = "OK" if cmd_bytes < 1024 else "BLOCK"
-        actual = "OK" if success else "BLOCKED"
-        match = "✓" if (expected == "BLOCK") == (not success) else "?"
+        if not success:
+            blocked += 1
         
         status = f"{'✅ OK' if success else '❌ BLOCKED'}"
         print(f"{num_lines:<8} {cmd_bytes:<10} {status}")
@@ -138,14 +137,16 @@ def main():
     print()
     print("=" * 60)
     print("CONCLUSION:")
-    if platform.system() == "Darwin":
-        print("  Multiline commands >~1024 bytes BLOCK on macOS PTY + zsh")
-        print("  Single-line commands of ANY size work fine.")
+    if blocked > 0:
+        print(f"  {blocked} test(s) BLOCKED — bug is present on this system")
+        print("  Multiline commands >~1024 bytes block on macOS PTY")
     else:
-        print(f"  On {platform.system()}, this bug may not reproduce.")
-        print("  The issue is specific to macOS PTY implementation.")
+        print("  All tests passed — bug not present on this system")
     print("=" * 60)
     sys.stdout.flush()
+    
+    # Exit non-zero if any tests blocked (bug detected)
+    sys.exit(1 if blocked > 0 else 0)
 
 if __name__ == "__main__":
     main()
