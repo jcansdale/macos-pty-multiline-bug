@@ -124,7 +124,9 @@ async function runAllTests(log) {
     results.push({ numLines, passed, failed, lastResult });
     failures += failed;
     const passStr = `${passed}/${iterations}`;
-    const status = failed === 0 ? '✅ OK' : `❌ ${lastResult.reason}`;
+    const status = failed === 0
+      ? '✅ OK'
+      : `❌ ${failed} FAILED`;
     log(`${String(numLines).padEnd(8)} ${String(lastResult.cmdBytes).padEnd(10)} ${passStr.padEnd(8)} ${status}`);
   }
 
