@@ -36,4 +36,3 @@ jobs:
       - name: Run PTY reproducer
         shell: bash
         run: python3 repro.py
-        continue-on-error: ${{ runner.os == 'macOS' }}
