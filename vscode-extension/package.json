@@ -1,0 +1,24 @@
+{
+  "name": "pty-multiline-repro",
+  "displayName": "PTY Multiline Bug Reproducer",
+  "description": "Reproduces macOS PTY multiline bug through VS Code's terminal.sendText() API",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "scripts": {
+    "test": "node ./run-tests.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.4.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "ptyRepro.run",
+        "title": "PTY Multiline Bug: Run Reproducer"
+      }
+    ]
+  }
+}

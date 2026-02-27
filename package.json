@@ -1,0 +1,14 @@
+{
+  "name": "macos-pty-multiline-bug",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reproducer for macOS PTY multiline buffer bug (VS Code issue #296955)",
+  "scripts": {
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true",
+    "test": "node repro-node-pty.js",
+    "test:python": "python3 repro.py"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  }
+}

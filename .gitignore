@@ -1,3 +1,11 @@
+# Node
+node_modules/
+package-lock.json
+
+# VS Code extension test
+.vscode-test/
+vscode-test-results.json
+
 # Python
 __pycache__/
 *.py[cod]

@@ -4,120 +4,108 @@ Multiline commands exceeding ~1024 bytes sent via VS Code's terminal tool block 
 
 Related VS Code issue: [microsoft/vscode#296955](https://github.com/microsoft/vscode/issues/296955)
 
-## Reproducing in VS Code Copilot (Agent Mode)
+## Reproducers
 
-The simplest way to trigger the bug is to ask Copilot in agent mode to run a multiline echo command that exceeds ~1024 bytes. Paste this into Copilot chat:
+### 1. VS Code extension (exercises full VS Code pipeline)
 
-> Run this command in the terminal:
->
-> echo 'L01 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L02 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L03 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L04 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L05 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L06 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L07 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L08 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L09 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L10 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L11 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L12 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L13 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L14 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L15 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L16 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L17 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L18 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L19 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-> L20 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' | wc -c
+A VS Code extension that calls `terminal.sendText()` with progressively larger multiline commands — the same API path that Copilot's terminal tool uses.
 
-**Expected:** Output `1120`
+This exercises the full write pipeline:  
+`sendText()` → `\n`→`\r` conversion → IPC → pty host → node-pty → PTY
 
-**Actual on macOS:** The terminal shows garbled output with buffer wraparound:
 ```
-echo 'L01 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-aaaaaaaaa                            <-- L01 split mid-content
-quote> L02 aaa...
-...
-quote> L19 aaaaaL02 aaaaaa...         <-- buffer replay at ~byte 1024
-quote> L03 aaaL03 aaaaaa...
+1. Open VS Code with this repo
+2. Run: code --extensionDevelopmentPath=./vscode-extension .
+3. Command Palette → "PTY Multiline Bug: Run Reproducer"
+4. Results appear in the "PTY Repro" output channel
 ```
 
-The shell enters `quote>` mode and never recovers. All subsequent commands in that terminal are consumed by the broken quote.
+### 2. node-pty reproducer (exercises VS Code's PTY library)
 
-### What happens in practice
+Uses [node-pty](https://github.com/microsoft/node-pty) directly — the same library VS Code uses — to write multiline commands to an interactive shell.
 
-This bug is commonly triggered when Copilot agents run real-world commands that happen to exceed ~1KB with literal newlines — for example:
-- `git commit` with a long multiline message
-- Writing file contents via heredoc
-- Multi-line `python3 -c` commands
-- Any multiline command body > ~1KB
+```bash
+npm install
+node repro-node-pty.js
+```
 
-### Requirements to reproduce
+### 3. Python PTY reproducer (raw kernel-level validation)
 
-- **macOS** (ARM64 or Intel)
-- **VS Code** with Copilot agent mode
-- Command must be **multiline** (literal newlines, not `\n`)  
-- Total command must exceed **~1024 bytes**
-- Must be sent via the **terminal tool** (`run_in_terminal`), not pasted manually
-
-## Standalone Reproducer
-
-The Python script reproduces the underlying PTY issue outside of VS Code. It writes multiline data to a PTY with an interactive shell and detects when `os.write()` blocks.
+Uses `pty.openpty()` + `os.fork()` + synchronous `os.write()` to demonstrate the underlying macOS kernel issue. On macOS, `os.write()` blocks when multiline input exceeds ~1024 bytes.
 
 ```bash
 python3 repro.py
 ```
 
-### Results
+## Results
 
-| Lines | Bytes | Result |
-|-------|-------|--------|
-| 10 | ~565 | ✅ OK |
-| 15 | ~840 | ✅ OK |
-| 18 | ~1005 | ✅ OK |
-| 20 | ~1115 | ❌ BLOCKED |
-| 25 | ~1390 | ❌ BLOCKED |
+### Python reproducer (macOS)
+
+| Lines | Bytes  | macOS  | Linux |
+|-------|--------|--------|-------|
+| 10    | ~565   | ✅ OK  | ✅ OK |
+| 15    | ~840   | ✅ OK  | ✅ OK |
+| 18    | ~1005  | ✅ OK  | ✅ OK |
+| 20    | ~1115  | ❌ BLOCKED | ✅ OK |
+| 25    | ~1390  | ❌ BLOCKED | ✅ OK |
 
 The threshold is ~1024 bytes — the classic PTY canonical-mode buffer size.
 
-On Linux, all tests pass (different PTY implementation).
+## VS Code's Write Path
+
+VS Code's `Terminal.sendText()` (used by Copilot's `run_in_terminal`) follows this path:
+
+```
+ExtHostTerminal.sendText(text)
+  → MainThreadTerminalService.$sendText()
+    → TerminalInstance.sendText()
+        text = text.replace(/\r?\n/g, '\r')   // normalize newlines to CR
+        text += '\r'                           // add trailing enter
+      → TerminalProcessManager.write(text)
+        → LocalPty.input(data)               // IPC to pty host process
+          → PtyService.input(id, data)
+            → PersistentTerminalProcess.input(data)
+              → TerminalProcess.input(data)
+                → ptyProcess.write(data)     // node-pty write
+```
+
+The entire text is written in a single `ptyProcess.write()` call.
 
 ## Root Cause
 
-When multiline data is written to a macOS PTY with an interactive shell:
+macOS PTY has a ~1024-byte input buffer. When an interactive shell's line editor (ZLE for zsh) echoes characters back, it creates backpressure on the PTY. When the buffer fills:
 
-1. The shell's line editor (ZLE for zsh) processes input character-by-character
-2. It echoes characters back, creating backpressure on the PTY
-3. macOS PTY has a ~1024-byte input buffer
-4. When the buffer fills, `os.write()` blocks indefinitely
-5. Partial data already sent gets corrupted
+1. With synchronous `write()` (Python): blocks indefinitely
+2. With non-blocking I/O (node-pty/libuv): may short-write, with remaining data queued
 
-Key facts:
-- **Only multiline commands affected** — single-line commands of ANY length work fine
-- **Threshold is ~1024 bytes** — the PTY canonical mode buffer
-- **macOS-specific** — Linux PTY drivers have larger buffers and handle backpressure differently
-- **Affects all interactive shells** — zsh, bash, etc.
-- **Not a display issue** — the shell genuinely receives corrupted/incomplete data
+The Python reproducer confirms the kernel-level bug. The node-pty reproducer tests whether libuv's non-blocking write handling prevents corruption. The VS Code extension tests the full pipeline including IPC, flow control, and xterm.js.
 
-## Workarounds
+**Single-line commands of any length work fine** — the bug only affects multiline input (containing literal newlines / `\r` characters that trigger line-by-line shell processing).
 
-For VS Code's terminal tool, any approach that avoids literal newlines in the command works:
+## Potential Fix
 
-| Approach | Works? |
-|----------|--------|
-| Write content to file first, then `cat file` | ✅ |
-| Use `$'line1\nline2'` syntax (escaped newlines) | ✅ |
-| Use `printf '%s\n' 'line1' 'line2'` | ✅ |
-| Keep multiline commands under 1KB | ✅ |
-| Write to PTY in small chunks with delays | ✅ (potential fix) |
+Write multiline PTY input in small chunks (e.g. 512 bytes) with brief pauses between writes, allowing the shell's line editor to drain its echo buffer:
+
+```js
+// Instead of:
+ptyProcess.write(data);
+
+// Do:
+const CHUNK_SIZE = 512;
+for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+  ptyProcess.write(data.slice(i, i + CHUNK_SIZE));
+  await sleep(5); // brief pause for backpressure drain
+}
+```
+
+This could be implemented in VS Code's `TerminalProcess.input()` method at [`src/vs/platform/terminal/node/terminalProcess.ts`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts).
 
 ## CI
 
 The GitHub Actions workflow tests across:
-- macOS 15 Sequoia (ARM64) — **expected to fail** (bug detected)
-- macOS 14 Sonoma (ARM64) — **expected to fail** (bug detected)
-- Ubuntu — expected to pass (exit 0)
+- macOS 15 (ARM64) — **expected to fail** (bug detected)
+- macOS 14 (ARM64) — **expected to fail** (bug detected)
+- Ubuntu — expected to pass
 
 ## License
 

@@ -21,6 +21,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       
       - name: Show environment info
         shell: bash
@@ -30,9 +35,47 @@ jobs:
           echo "Runner OS: $RUNNER_OS"
           uname -a
           python3 --version
+          node --version
           echo "Shell: $SHELL"
           echo "TERM: $TERM"
-          
-      - name: Run PTY reproducer
+
+      - name: Install node-pty
+        shell: bash
+        run: npm install
+
+      - name: Run Python PTY reproducer
         shell: bash
         run: python3 repro.py
+
+      - name: Run node-pty reproducer
+        shell: bash
+        run: node repro-node-pty.js
+
+      - name: Install VS Code extension test dependencies
+        shell: bash
+        working-directory: vscode-extension
+        run: npm install
+
+      - name: Run VS Code extension test (macOS - stable)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: vscode-extension
+        env:
+          VSCODE_VERSION: stable
+        run: npm test
+
+      - name: Run VS Code extension test (macOS - insiders)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: vscode-extension
+        env:
+          VSCODE_VERSION: insiders
+        run: npm test
+
+      - name: Run VS Code extension test (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: vscode-extension
+        env:
+          VSCODE_VERSION: stable
+        run: xvfb-run -a npm test
