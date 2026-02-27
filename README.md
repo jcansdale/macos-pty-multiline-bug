@@ -93,13 +93,13 @@ Key source locations (VS Code `main` branch):
 
 | Step | Source |
 |------|--------|
-| `sendText()` — newline conversion | [terminalInstance.ts `sendText()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalInstance.ts) — `text.replace(/\r?\n/g, '\r')` |
-| `write()` — sends to pty host | [terminalProcessManager.ts `write()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts) — calls `this._process.input(data)` |
-| `input()` — IPC to pty host | [localPty.ts `input()`](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/electron-browser/localPty.ts) |
-| `input()` — pty host side | [ptyService.ts `input()`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/ptyService.ts) |
-| **`input()` — writes to node-pty** | [**terminalProcess.ts `input()`**](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) — `this._ptyProcess!.write(data)` |
-| Flow control (output side) | [terminalProcess.ts `acknowledgeDataEvent()`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) — pause/resume at 100K chars |
-| Flow control constants | [terminal.ts `FlowControlConstants`](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/common/terminal.ts) — `HighWatermarkChars = 100000` |
+| `sendText()` — newline conversion | [terminalInstance.ts#L1343](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalInstance.ts#L1343) — `text.replace(/\r?\n/g, '\r')` |
+| `write()` — sends to pty host | [terminalProcessManager.ts#L626](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts#L626) — calls `this._process.input(data)` |
+| `input()` — IPC to pty host | [localPty.ts#L46](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/electron-browser/localPty.ts#L46) |
+| `input()` — pty host side | [ptyService.ts#L441](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/ptyService.ts#L441) |
+| **`input()` — writes to node-pty** | [**terminalProcess.ts#L468**](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts#L468) — `this._ptyProcess!.write(data)` |
+| Flow control (output side) | [terminalProcess.ts#L562](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts#L562) — pause/resume at 100K chars |
+| Flow control constants | [terminal.ts#L863](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/common/terminal.ts#L863) — `HighWatermarkChars = 100000` |
 
 ## Root Cause
 
