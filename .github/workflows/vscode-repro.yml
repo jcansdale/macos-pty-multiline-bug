@@ -1,4 +1,4 @@
-name: PTY Multiline Bug Reproducer
+name: VS Code Extension Reproducer
 
 on:
   push:
@@ -6,48 +6,50 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-pty:
+  test-vscode:
     strategy:
       fail-fast: false
       matrix:
         os: [macos-15, macos-14, ubuntu-latest]
-    
+        vscode-version: [stable, insiders]
+
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+
       - name: Show environment info
         shell: bash
         run: |
           echo "=== Environment Info ==="
           echo "OS: ${{ matrix.os }}"
-          echo "Runner OS: $RUNNER_OS"
+          echo "VS Code: ${{ matrix.vscode-version }}"
           uname -a
-          python3 --version
           node --version
           echo "Shell: $SHELL"
-          echo "TERM: $TERM"
 
-      - name: Install node-pty
+      - name: Install extension dependencies
         shell: bash
+        working-directory: vscode-extension
         run: npm install
 
-      - name: Run Python PTY reproducer
+      - name: Run VS Code extension test (macOS)
+        if: runner.os == 'macOS'
         shell: bash
-        run: python3 repro.py
+        working-directory: vscode-extension
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode-version }}
+        run: npm test
 
-      - name: Run node-pty reproducer
+      - name: Run VS Code extension test (Linux)
+        if: runner.os == 'Linux'
         shell: bash
-        run: node repro-node-pty.js
+        working-directory: vscode-extension
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode-version }}
         run: xvfb-run -a npm test
