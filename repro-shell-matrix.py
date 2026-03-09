@@ -29,6 +29,8 @@ DEFAULT_SHELLS = [
 	"/bin/sh",
 	"/bin/dash",
 	"/bin/ksh",
+	"/bin/tcsh",
+	"/bin/csh",
 ]
 
 DEFAULT_LINE_COUNTS = [18, 20, 25]

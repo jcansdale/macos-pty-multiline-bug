@@ -72,6 +72,12 @@ jobs:
           - os: macos-15
             shell_name: ksh
             shell_path: /bin/ksh
+          - os: macos-15
+            shell_name: tcsh
+            shell_path: /bin/tcsh
+          - os: macos-15
+            shell_name: csh
+            shell_path: /bin/csh
 
     runs-on: ${{ matrix.os }}
 
