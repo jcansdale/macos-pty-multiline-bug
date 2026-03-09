@@ -50,3 +50,81 @@ jobs:
       - name: Run node-pty reproducer
         shell: bash
         run: node repro-node-pty.js
+
+  test-shell-matrix:
+    name: Shell matrix (${{ matrix.os }}, ${{ matrix.shell_name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            shell_name: zsh
+            shell_path: /bin/zsh
+          - os: macos-15
+            shell_name: bash
+            shell_path: /bin/bash
+          - os: macos-15
+            shell_name: sh
+            shell_path: /bin/sh
+          - os: macos-15
+            shell_name: dash
+            shell_path: /bin/dash
+          - os: macos-15
+            shell_name: ksh
+            shell_path: /bin/ksh
+          - os: macos-14
+            shell_name: zsh
+            shell_path: /bin/zsh
+          - os: macos-14
+            shell_name: bash
+            shell_path: /bin/bash
+          - os: macos-14
+            shell_name: sh
+            shell_path: /bin/sh
+          - os: macos-14
+            shell_name: dash
+            shell_path: /bin/dash
+          - os: macos-14
+            shell_name: ksh
+            shell_path: /bin/ksh
+          - os: ubuntu-latest
+            shell_name: bash
+            shell_path: /bin/bash
+          - os: ubuntu-latest
+            shell_name: sh
+            shell_path: /bin/sh
+          - os: ubuntu-latest
+            shell_name: dash
+            shell_path: /bin/dash
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show shell matrix environment info
+        shell: bash
+        run: |
+          echo "=== Shell Matrix Environment Info ==="
+          echo "OS: ${{ matrix.os }}"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Shell: ${{ matrix.shell_name }} (${{ matrix.shell_path }})"
+          uname -a
+          python3 --version
+
+      - name: Verify shell exists
+        shell: bash
+        run: |
+          if [[ ! -x "${{ matrix.shell_path }}" ]]; then
+            echo "Shell not found: ${{ matrix.shell_path }}"
+            exit 1
+          fi
+
+      - name: Run shell matrix experiment
+        shell: bash
+        run: python3 repro-shell-matrix.py --shell "${{ matrix.shell_path }}"
