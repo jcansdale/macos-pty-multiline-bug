@@ -57,7 +57,8 @@ npm run test:python:shells
 
 This is exploratory only: a shell that passes here still needs validation via
 the full VS Code `terminal.sendText()` path before it should be considered a
-real workaround.
+real workaround. By default, the script runs 10 samples per shell and line
+count.
 
 ## Results
 

@@ -167,7 +167,7 @@ def summarize_shell(shell: str, line_counts: list[int], iterations: int, timeout
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Compare shells against the macOS PTY multiline bug")
 	parser.add_argument("--shell", action="append", default=[], help="Shell path to test. Can be repeated.")
-	parser.add_argument("--iterations", type=int, default=5, help="Iterations to run per shell and line count.")
+	parser.add_argument("--iterations", type=int, default=10, help="Iterations to run per shell and line count.")
 	parser.add_argument("--lines", default="18,20,25", help="Comma-separated line counts to test.")
 	parser.add_argument("--line-length", type=int, default=50, help="Characters per content line.")
 	parser.add_argument("--timeout", type=float, default=2.0, help="Timeout in seconds for each write/read attempt.")
