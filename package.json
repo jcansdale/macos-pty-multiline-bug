@@ -6,7 +6,8 @@
   "scripts": {
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true",
     "test": "node repro-node-pty.js",
-    "test:python": "python3 repro.py"
+    "test:python": "python3 repro.py",
+    "test:python:shells": "python3 repro-shell-matrix.py"
   },
   "dependencies": {
     "node-pty": "^1.0.0"

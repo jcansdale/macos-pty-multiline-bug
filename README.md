@@ -40,6 +40,25 @@ Uses `pty.openpty()` + `os.fork()` + synchronous `os.write()` to demonstrate the
 python3 repro.py
 ```
 
+### 4. Shell matrix experiment (workaround exploration)
+
+Compares several interactive shells on the same raw PTY path to see whether a
+shell-profile workaround might be viable.
+
+```bash
+python3 repro-shell-matrix.py
+```
+
+Or via npm:
+
+```bash
+npm run test:python:shells
+```
+
+This is exploratory only: a shell that passes here still needs validation via
+the full VS Code `terminal.sendText()` path before it should be considered a
+real workaround.
+
 ## Results
 
 ### VS Code extension (macOS — CI)
@@ -68,6 +87,10 @@ The bug is intermittent — commands above ~1024 bytes fail on some iterations b
 | 25    | ~1390  | ❌ BLOCKED | ✅ OK |
 
 The threshold is ~1024 bytes — the classic PTY canonical-mode buffer size.
+
+The shell matrix experiment is intended to answer a narrower question: whether
+some shells are more resilient than others, which would make a temporary
+Copilot shell-profile workaround more plausible.
 
 ## VS Code's Write Path
 
