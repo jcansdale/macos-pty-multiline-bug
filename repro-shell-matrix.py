@@ -202,9 +202,13 @@ def main() -> int:
 	print()
 
 	passing_shells = []
+	all_shells_passed = True
 	for shell in shells:
-		if summarize_shell(shell, line_counts, args.iterations, args.timeout, args.line_length):
+		shell_passed = summarize_shell(shell, line_counts, args.iterations, args.timeout, args.line_length)
+		if shell_passed:
 			passing_shells.append(shell)
+		else:
+			all_shells_passed = False
 
 	print("=" * 72)
 	if passing_shells:
@@ -216,7 +220,7 @@ def main() -> int:
 		print("This suggests the workaround likely needs to stay in the PTY write path,")
 		print("not just in shell selection.")
 	print("=" * 72)
-	return 0
+	return 0 if all_shells_passed else 1
 
 
 if __name__ == "__main__":

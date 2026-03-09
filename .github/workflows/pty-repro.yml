@@ -72,30 +72,6 @@ jobs:
           - os: macos-15
             shell_name: ksh
             shell_path: /bin/ksh
-          - os: macos-14
-            shell_name: zsh
-            shell_path: /bin/zsh
-          - os: macos-14
-            shell_name: bash
-            shell_path: /bin/bash
-          - os: macos-14
-            shell_name: sh
-            shell_path: /bin/sh
-          - os: macos-14
-            shell_name: dash
-            shell_path: /bin/dash
-          - os: macos-14
-            shell_name: ksh
-            shell_path: /bin/ksh
-          - os: ubuntu-latest
-            shell_name: bash
-            shell_path: /bin/bash
-          - os: ubuntu-latest
-            shell_name: sh
-            shell_path: /bin/sh
-          - os: ubuntu-latest
-            shell_name: dash
-            shell_path: /bin/dash
 
     runs-on: ${{ matrix.os }}
 
