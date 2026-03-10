@@ -4,6 +4,8 @@ Multiline commands exceeding ~1024 bytes sent via VS Code's terminal tool block 
 
 Related VS Code issue: [microsoft/vscode#296955](https://github.com/microsoft/vscode/issues/296955)
 
+Apple feedback report: [FB22178840](https://feedbackassistant.apple.com/feedback/22178840)
+
 ## Reproducers
 
 ### 1. VS Code extension (exercises full VS Code pipeline)
