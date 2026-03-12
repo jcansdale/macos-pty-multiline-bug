@@ -52,11 +52,13 @@ async function waitForMarker(tmpFile, marker, timeoutMs) {
  * Run multiple iterations for a given line count on one terminal.
  * Reusing the terminal avoids the 1s settle time per iteration.
  */
-async function runTestGroup(numLines, iterations) {
-  const terminal = vscode.window.createTerminal({
+async function runTestGroup(numLines, iterations, shellPath) {
+  const terminalOptions = {
     name: `PTY ${numLines}`,
     hideFromUser: false,
-  });
+  };
+  if (shellPath) terminalOptions.shellPath = shellPath;
+  const terminal = vscode.window.createTerminal(terminalOptions);
 
   await sleep(SETTLE_MS);
 
@@ -94,18 +96,17 @@ async function runTestGroup(numLines, iterations) {
 }
 
 /**
- * Run all test cases. Returns { failures, results }.
+ * Run all test cases for a single shell. Returns { failures, results }.
  */
-async function runAllTests(log) {
+async function runAllTestsForShell(log, shellPath) {
   const testSizes = [5, 10, 18, 20, 25, 30];
   const iterations = 5;
 
-  log(`Running ${iterations} iterations per size, sizes in parallel`);
   log(`${'Lines'.padEnd(8)} ${'Bytes'.padEnd(10)} ${'Pass'.padEnd(8)} Result`);
   log('-'.repeat(60));
 
   // Run all sizes in parallel
-  const promises = testSizes.map(n => runTestGroup(n, iterations));
+  const promises = testSizes.map(n => runTestGroup(n, iterations, shellPath));
   const results = await Promise.all(promises);
 
   let totalFailures = 0;
@@ -125,6 +126,39 @@ async function runAllTests(log) {
   }
 
   return { failures: totalFailures, results };
+}
+
+/**
+ * Run all test cases across all available shells. Returns { failures, results }.
+ */
+async function runAllTests(log) {
+  const candidateShells = ['/bin/zsh', '/bin/bash', '/opt/homebrew/bin/bash', '/bin/sh', '/bin/dash'];
+  const shells = candidateShells.filter(s => {
+    try { require('fs').accessSync(s, require('fs').constants.X_OK); return true; } catch { return false; }
+  });
+
+  log(`Running ${shells.length} shell(s): ${shells.join(', ')}`);
+  log(`Running 5 iterations per size, sizes in parallel`);
+
+  let totalFailures = 0;
+  const allResults = {};
+
+  for (const shell of shells) {
+    log('');
+    log(`Shell: ${shell}`);
+    try {
+      const { failures, results } = await runAllTestsForShell(log, shell);
+      totalFailures += failures;
+      allResults[shell] = results;
+    } catch (err) {
+      log(`  ERROR: ${err && err.message || err}`);
+      allResults[shell] = { error: String(err) };
+    }
+    // Brief pause between shells to let VS Code settle
+    await sleep(500);
+  }
+
+  return { failures: totalFailures, results: allResults };
 }
 
 function activate(context) {
@@ -163,4 +197,4 @@ function sleep(ms) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, runAllTests, runSingleTest: runTestGroup };
+module.exports = { activate, deactivate, runAllTests, runAllTestsForShell, runSingleTest: runTestGroup };
