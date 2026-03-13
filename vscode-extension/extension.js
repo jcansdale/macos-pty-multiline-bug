@@ -86,11 +86,17 @@ async function runTestGroup(numLines, iterations, shellPath, bracketedPaste = fa
 
     if (bracketedPaste) {
       // Wrap the command in bracketed paste escape sequences so the shell
-      // buffers the entire input atomically. The shell treats the \r
-      // characters inside the markers as literal content rather than
-      // line-execution signals. addNewLine=true appends \r after PASTE_END,
-      // which tells the shell to execute the buffered command.
-      terminal.sendText(PASTE_START + test.cmd + PASTE_END, true);
+      // buffers the entire input atomically. Send line-by-line rather than
+      // as one large write: the macOS PTY drops bytes when a single write
+      // exceeds ~2 KB, which would silently lose PASTE_END and leave the
+      // shell stuck in paste mode forever. Each individual line is < 200
+      // bytes, well within any PTY buffer limit.
+      const fullText = PASTE_START + test.cmd + PASTE_END;
+      const parts = fullText.split('\n');
+      for (let j = 0; j < parts.length - 1; j++) {
+        terminal.sendText(parts[j] + '\n', false);
+      }
+      terminal.sendText(parts[parts.length - 1], true);
     } else {
       terminal.sendText(test.cmd, true);
     }
@@ -194,14 +200,23 @@ async function runAllTests(log) {
   }
 
   // ── Pass 2: with bracketed paste (demonstrates the mitigation) ──────────
+  // Only run shells known to support bracketed paste (DECSET 2004).
+  // /bin/bash 3.2 (macOS default), /bin/sh, and /bin/dash do not support it;
+  // including them in Pass 2 produces misleading failures.
+  const BRACKETED_PASTE_SHELLS = new Set(['/bin/zsh', '/opt/homebrew/bin/bash']);
+  const bpShells = shells.filter(s => BRACKETED_PASTE_SHELLS.has(s));
+
   log('');
   log('━'.repeat(60));
   log('Pass 2 — with bracketed paste (demonstrates the mitigation)');
-  log('Note: shells without bracketed paste support (e.g. /bin/bash 3.2, ksh)');
-  log('      will not benefit from this approach.');
+  if (bpShells.length > 0) {
+    log(`Shells with bracketed paste support: ${bpShells.join(', ')}`);
+  } else {
+    log('No shells with bracketed paste support found on this system.');
+  }
   log('━'.repeat(60));
 
-  for (const shell of shells) {
+  for (const shell of bpShells) {
     log('');
     log(`Shell: ${shell}`);
     try {
