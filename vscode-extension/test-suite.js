@@ -17,6 +17,11 @@ async function run() {
   console.log(`VS Code:  ${vscode.version}`);
   console.log(`Shell:    ${process.env.SHELL || 'unknown'}`);
   console.log('');
+  console.log('Two passes are run per shell:');
+  console.log('  Pass 1 — without bracketed paste: demonstrates the bug');
+  console.log('  Pass 2 — with bracketed paste:    demonstrates the mitigation');
+  console.log('           (zsh and bash 5.1+ support bracketed paste)');
+  console.log('');
 
   // Import the extension's test logic
   const ext = require('./extension');
@@ -30,6 +35,7 @@ async function run() {
   if (failures > 0) {
     console.log(`  ${failures} test(s) FAILED — bug is present on this system`);
     console.log('  Multiline commands >~1024 bytes fail via VS Code sendText()');
+    console.log('  See Pass 2 above for bracketed paste mitigation results.');
     console.log('='.repeat(60));
 
     // Write results to a file for CI to pick up

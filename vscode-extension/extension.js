@@ -16,6 +16,13 @@ const SETTLE_MS = 1000;   // wait for shell prompt
 const TIMEOUT_MS = 8000;  // per command
 const BETWEEN_MS = 500;   // between sends on same terminal
 
+// Bracketed paste mode escape sequences (supported by zsh and bash 5.1+).
+// Wrapping input in these markers causes the shell to treat the entire
+// pasted block atomically, bypassing the kernel canonical-mode line-by-line
+// processing that causes the ~1024-byte corruption on macOS.
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
 function buildTest(numLines, iter, lineLength = 50) {
   const lines = [];
   for (let i = 1; i <= numLines; i++) {
@@ -51,10 +58,15 @@ async function waitForMarker(tmpFile, marker, timeoutMs) {
 /**
  * Run multiple iterations for a given line count on one terminal.
  * Reusing the terminal avoids the 1s settle time per iteration.
+ *
+ * @param {number} numLines
+ * @param {number} iterations
+ * @param {string|undefined} shellPath
+ * @param {boolean} [bracketedPaste=false] - wrap command in bracketed paste sequences
  */
-async function runTestGroup(numLines, iterations, shellPath) {
+async function runTestGroup(numLines, iterations, shellPath, bracketedPaste = false) {
   const terminalOptions = {
-    name: `PTY ${numLines}`,
+    name: `PTY ${numLines}${bracketedPaste ? ' BP' : ''}`,
     hideFromUser: false,
   };
   if (shellPath) terminalOptions.shellPath = shellPath;
@@ -72,7 +84,16 @@ async function runTestGroup(numLines, iterations, shellPath) {
     cmdBytes = test.cmdBytes;
     try { fs.unlinkSync(test.tmpFile); } catch {}
 
-    terminal.sendText(test.cmd, true);
+    if (bracketedPaste) {
+      // Wrap the command in bracketed paste escape sequences so the shell
+      // buffers the entire input atomically. The shell treats the \r
+      // characters inside the markers as literal content rather than
+      // line-execution signals. addNewLine=true appends \r after PASTE_END,
+      // which tells the shell to execute the buffered command.
+      terminal.sendText(PASTE_START + test.cmd + PASTE_END, true);
+    } else {
+      terminal.sendText(test.cmd, true);
+    }
     const result = await waitForMarker(test.tmpFile, test.marker, TIMEOUT_MS);
 
     if (result.success) {
@@ -97,8 +118,12 @@ async function runTestGroup(numLines, iterations, shellPath) {
 
 /**
  * Run all test cases for a single shell. Returns { failures, results }.
+ *
+ * @param {Function} log
+ * @param {string|undefined} shellPath
+ * @param {boolean} [bracketedPaste=false]
  */
-async function runAllTestsForShell(log, shellPath) {
+async function runAllTestsForShell(log, shellPath, bracketedPaste = false) {
   const testSizes = [5, 10, 18, 20, 25, 30];
   const iterations = 5;
 
@@ -106,7 +131,7 @@ async function runAllTestsForShell(log, shellPath) {
   log('-'.repeat(60));
 
   // Run all sizes in parallel
-  const promises = testSizes.map(n => runTestGroup(n, iterations, shellPath));
+  const promises = testSizes.map(n => runTestGroup(n, iterations, shellPath, bracketedPaste));
   const results = await Promise.all(promises);
 
   let totalFailures = 0;
@@ -130,6 +155,11 @@ async function runAllTestsForShell(log, shellPath) {
 
 /**
  * Run all test cases across all available shells. Returns { failures, results }.
+ *
+ * The shell matrix is run twice:
+ *   1. Without bracketed paste — demonstrates the bug (current behaviour).
+ *   2. With bracketed paste wrapping — demonstrates the mitigation for shells
+ *      that support it (zsh, bash 5.1+).
  */
 async function runAllTests(log) {
   const candidateShells = ['/bin/zsh', '/bin/bash', '/opt/homebrew/bin/bash', '/bin/sh', '/bin/dash'];
@@ -143,18 +173,46 @@ async function runAllTests(log) {
   let totalFailures = 0;
   const allResults = {};
 
+  // ── Pass 1: without bracketed paste (demonstrates the bug) ──────────────
+  log('');
+  log('━'.repeat(60));
+  log('Pass 1 — without bracketed paste (demonstrates the bug)');
+  log('━'.repeat(60));
+
   for (const shell of shells) {
     log('');
     log(`Shell: ${shell}`);
     try {
-      const { failures, results } = await runAllTestsForShell(log, shell);
+      const { failures, results } = await runAllTestsForShell(log, shell, false);
       totalFailures += failures;
-      allResults[shell] = results;
+      allResults[shell] = { plain: results };
     } catch (err) {
       log(`  ERROR: ${err && err.message || err}`);
-      allResults[shell] = { error: String(err) };
+      allResults[shell] = { plain: { error: String(err) } };
     }
-    // Brief pause between shells to let VS Code settle
+    await sleep(500);
+  }
+
+  // ── Pass 2: with bracketed paste (demonstrates the mitigation) ──────────
+  log('');
+  log('━'.repeat(60));
+  log('Pass 2 — with bracketed paste (demonstrates the mitigation)');
+  log('Note: shells without bracketed paste support (e.g. /bin/bash 3.2, ksh)');
+  log('      will not benefit from this approach.');
+  log('━'.repeat(60));
+
+  for (const shell of shells) {
+    log('');
+    log(`Shell: ${shell}`);
+    try {
+      const { results: bpResults } = await runAllTestsForShell(log, shell, true);
+      if (!allResults[shell]) allResults[shell] = {};
+      allResults[shell].bracketedPaste = bpResults;
+    } catch (err) {
+      log(`  ERROR: ${err && err.message || err}`);
+      if (!allResults[shell]) allResults[shell] = {};
+      allResults[shell].bracketedPaste = { error: String(err) };
+    }
     await sleep(500);
   }
 
