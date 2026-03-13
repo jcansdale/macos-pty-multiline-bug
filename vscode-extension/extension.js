@@ -23,16 +23,26 @@ const BETWEEN_MS = 500;   // between sends on same terminal
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 
-function buildTest(numLines, iter, lineLength = 50) {
+function buildTest(numLines, iter, lineLength = 50, singleLine = false) {
   const lines = [];
   for (let i = 1; i <= numLines; i++) {
     lines.push(`L${String(i).padStart(2, '0')} ${'a'.repeat(lineLength)}`);
   }
-  const content = lines.join('\n');
   const id = `${numLines}_${iter}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const marker = `DONE_${id}`;
   const tmpFile = path.join(os.tmpdir(), `pty-repro-${id}.txt`);
-  const cmd = `echo '${content}' | wc -c > ${tmpFile} && echo ${marker} >> ${tmpFile}`;
+  let cmd;
+  if (singleLine) {
+    // Use printf with \n escape sequences so the entire command is one line
+    // (no literal newlines). This lets us send the whole bracketed paste region
+    // as a single sendText call — the shell's ZLE in raw mode accumulates it
+    // across as many PTY reads as needed and executes it atomically.
+    const content = lines.join('\\n') + '\\n';
+    cmd = `printf '${content}' | wc -c > ${tmpFile} && echo ${marker} >> ${tmpFile}`;
+  } else {
+    const content = lines.join('\n');
+    cmd = `echo '${content}' | wc -c > ${tmpFile} && echo ${marker} >> ${tmpFile}`;
+  }
   return { cmd, marker, tmpFile, cmdBytes: Buffer.byteLength(cmd) };
 }
 
@@ -80,23 +90,16 @@ async function runTestGroup(numLines, iterations, shellPath, bracketedPaste = fa
   let lastDetail = '';
 
   for (let i = 0; i < iterations; i++) {
-    const test = buildTest(numLines, i);
+    const test = buildTest(numLines, i, 50, bracketedPaste);
     cmdBytes = test.cmdBytes;
     try { fs.unlinkSync(test.tmpFile); } catch {}
 
     if (bracketedPaste) {
-      // Wrap the command in bracketed paste escape sequences so the shell
-      // buffers the entire input atomically. Send line-by-line rather than
-      // as one large write: the macOS PTY drops bytes when a single write
-      // exceeds ~2 KB, which would silently lose PASTE_END and leave the
-      // shell stuck in paste mode forever. Each individual line is < 200
-      // bytes, well within any PTY buffer limit.
-      const fullText = PASTE_START + test.cmd + PASTE_END;
-      const parts = fullText.split('\n');
-      for (let j = 0; j < parts.length - 1; j++) {
-        terminal.sendText(parts[j] + '\n', false);
-      }
-      terminal.sendText(parts[parts.length - 1], true);
+      // The command is built without literal newlines (printf + \n escapes),
+      // so the entire bracketed paste region is one line. Send it as a single
+      // sendText call so the shell's ZLE receives PASTE_START, command, and
+      // PASTE_END in the same write and executes the command atomically.
+      terminal.sendText(PASTE_START + test.cmd + PASTE_END, true);
     } else {
       terminal.sendText(test.cmd, true);
     }
