@@ -124,7 +124,7 @@ async function runTestGroup(numLines, iterations, shellPath, bracketedPaste = fa
  * @param {boolean} [bracketedPaste=false]
  */
 async function runAllTestsForShell(log, shellPath, bracketedPaste = false) {
-  const testSizes = [5, 10, 18, 20, 25, 30];
+  const testSizes = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
   const iterations = 10;
 
   log(`${'Lines'.padEnd(8)} ${'Bytes'.padEnd(10)} ${'Pass'.padEnd(8)} Result`);
