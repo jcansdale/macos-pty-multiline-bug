@@ -125,7 +125,7 @@ async function runTestGroup(numLines, iterations, shellPath, bracketedPaste = fa
  */
 async function runAllTestsForShell(log, shellPath, bracketedPaste = false) {
   const testSizes = [5, 10, 18, 20, 25, 30];
-  const iterations = 5;
+  const iterations = 10;
 
   log(`${'Lines'.padEnd(8)} ${'Bytes'.padEnd(10)} ${'Pass'.padEnd(8)} Result`);
   log('-'.repeat(60));
@@ -168,7 +168,7 @@ async function runAllTests(log) {
   });
 
   log(`Running ${shells.length} shell(s): ${shells.join(', ')}`);
-  log(`Running 5 iterations per size, sizes in parallel`);
+  log(`Running 10 iterations per size, sizes in parallel`);
 
   let totalFailures = 0;
   const allResults = {};
